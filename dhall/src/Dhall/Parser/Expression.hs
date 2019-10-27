@@ -130,7 +130,9 @@ parsers embedded = Parsers {..}
   where
     completeExpression_ = do
         whitespace
-        expression
+        a <- expression
+        whitespace
+        return a
 
     expression =
         noted
@@ -146,21 +148,33 @@ parsers embedded = Parsers {..}
       where
         alternative0 = do
             _lambda
+            whitespace
             _openParens
+            whitespace
             a <- label
+            whitespace
             _colon
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _closeParens
+            whitespace
             _arrow
+            whitespace
             c <- expression
             return (Lam a b c)
 
         alternative1 = do
             _if
+            nonemptyWhitespace
             a <- expression
+            whitespace
             _then
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _else
+            nonemptyWhitespace
             c <- expression
             return (BoolIf a b c)
 
@@ -180,6 +194,8 @@ parsers embedded = Parsers {..}
                         src2 <- src nonemptyWhitespace
 
                         e <- expression
+
+                        whitespace -- TODO: Save comment?
                         return (Just src2, e) )
 
                     _equalOnly
@@ -188,11 +204,15 @@ parsers embedded = Parsers {..}
 
                     f <- expression
 
+                    whitespace -- TODO: Save comment?
+
                     return (Binding (Just src0) c (Just src1) d (Just src3) f)
 
             as <- Data.List.NonEmpty.some1 binding
 
             _in
+
+            nonemptyWhitespace
 
             b <- expression
 
@@ -217,31 +237,46 @@ parsers embedded = Parsers {..}
 
         alternative3 = do
             _forall
+            whitespace
             _openParens
+            whitespace
             a <- label
+            whitespace
             _colon
+            nonemptyWhitespace
             b <- expression
+            whitespace
             _closeParens
+            whitespace
             _arrow
+            whitespace
             c <- expression
             return (Pi a b c)
 
         alternative4 = do
             _assert
+            whitespace
             _colon
+            nonemptyWhitespace
             a <- expression
             return (Assert a)
 
         alternative5 = do
             a <- operatorExpression
 
+            whitespace
+
             let alternative4A = do
                     _arrow
+                    whitespace
                     b <- expression
+                    whitespace
                     return (Pi "_" a b)
 
             let alternative4B = do
                     _colon
+
+                    nonemptyWhitespace
 
                     b <- expression
 
@@ -262,10 +297,12 @@ parsers embedded = Parsers {..}
     makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
+                whitespace
                 b <- Text.Megaparsec.many $ do
                     op <- operatorParser
+                    whitespace -- TODO: + and ? are followed by whsp1
                     r  <- subExpression
-
+                    whitespace
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
@@ -287,10 +324,10 @@ parsers embedded = Parsers {..}
         ]
 
     applicationExpression = do
-            f <-    (do _Some; return Some)
+            f <-    (do _Some; nonemptyWhitespace; return Some)
                 <|> return id
             a <- noted importExpression_
-            b <- Text.Megaparsec.many (noted importExpression_)
+            b <- Text.Megaparsec.many (try $ do nonemptyWhitespace; noted importExpression_)
             return (foldl app (f a) b)
           where
             app nL@(Note (Src before _ bytesL) _) nR@(Note (Src _ after bytesR) _) =
@@ -321,6 +358,8 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
+            whitespace
+
             let recordType = _openParens *> expression <* _closeParens
 
             let field               x  e = Field   e  x
@@ -332,7 +371,7 @@ parsers embedded = Parsers {..}
                     <|> fmap projectBySet        labels
                     <|> fmap projectByExpression recordType
 
-            b <- Text.Megaparsec.many (try (do _dot; alternatives))
+            b <- Text.Megaparsec.many ((do _dot; whitespace; alternatives <* whitespace))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -375,9 +414,13 @@ parsers embedded = Parsers {..}
             alternative04 = (do
                 _openBrace
 
-                _ <- optional _comma
+                whitespace
+
+                _ <- optional (_comma >> whitespace)
 
                 a <- recordTypeOrLiteral
+
+                whitespace
 
                 _closeBrace
 
@@ -389,12 +432,15 @@ parsers embedded = Parsers {..}
 
             alternative07 = do
                 _merge
+                nonemptyWhitespace
                 a <- importExpression_
+                nonemptyWhitespace
                 b <- importExpression_ <?> "second argument to ❰merge❱"
                 return (Merge a b Nothing)
 
             alternative08 = do
                 _toMap
+                nonemptyWhitespace
                 a <- importExpression_
                 return (ToMap a Nothing)
 
@@ -669,26 +715,40 @@ parsers embedded = Parsers {..}
     nonEmptyRecordTypeOrLiteral = do
             a <- anyLabel
 
+            whitespace
+
             let nonEmptyRecordType = do
                     _colon
+                    nonemptyWhitespace
                     b <- expression
+                    whitespace
                     e <- Text.Megaparsec.many (do
                         _comma
+                        whitespace
                         c <- anyLabel
+                        whitespace
                         _colon
+                        nonemptyWhitespace
                         d <- expression
+                        whitespace
                         return (c, d) )
                     m <- toMap ((a, b) : e)
                     return (Record m)
 
             let nonEmptyRecordLiteral = do
                     _equal
+                    whitespace
                     b <- expression
+                    whitespace
                     e <- Text.Megaparsec.many (do
                         _comma
+                        whitespace
                         c <- anyLabel
+                        whitespace
                         _equal
+                        whitespace
                         d <- expression
+                        whitespace
                         return (c, d) )
                     m <- toMap ((a, b) : e)
                     return (RecordLit m)
@@ -698,14 +758,17 @@ parsers embedded = Parsers {..}
     unionType = (do
             _openAngle
 
-            _ <- optional _bar
+            whitespace
+
+            _ <- optional (_bar >> whitespace)
 
             let unionTypeEntry = do
                     a <- anyLabel
-                    b <- optional (do _colon; expression)
+                    whitespace
+                    b <- optional (do _colon; nonemptyWhitespace; e <- expression; whitespace; return e)
                     return (a, b)
 
-            kvs <- Text.Megaparsec.sepBy unionTypeEntry _bar
+            kvs <- Text.Megaparsec.sepBy unionTypeEntry (_bar >> whitespace)
 
             m <- toMap kvs
 
@@ -716,9 +779,11 @@ parsers embedded = Parsers {..}
     listLiteral = (do
             _openBracket
 
-            _ <- optional _comma
+            whitespace
 
-            a <- Text.Megaparsec.sepBy expression _comma
+            _ <- optional (_comma >> whitespace)
+
+            a <- Text.Megaparsec.sepBy (expression <* whitespace) (_comma >> whitespace)
 
             _closeBracket
             return (ListLit Nothing (Data.Sequence.fromList a)) ) <?> "literal"
@@ -731,7 +796,6 @@ env :: Parser ImportType
 env = do
     _ <- text "env:"
     a <- (alternative0 <|> alternative1)
-    whitespace
     return (Env a)
   where
     alternative0 = bashEnvironmentVariable
@@ -795,6 +859,7 @@ http = do
     whitespace
     headers <- optional (do
         _using
+        nonemptyWhitespace
         importExpression import_ )
     return (Remote (url { headers }))
 
@@ -828,7 +893,6 @@ importHash_ :: Parser Dhall.Crypto.SHA256Digest
 importHash_ = do
     _ <- text "sha256:"
     t <- count 64 (satisfy hexdig <?> "hex digit")
-    whitespace
     let strictBytes16 = Data.Text.Encoding.encodeUtf8 t
     strictBytes <- case Data.ByteArray.Encoding.convertFromBase Base16 strictBytes16 of
         Left  string      -> fail string
@@ -844,7 +908,7 @@ importHash_ = do
 importHashed_ :: Parser ImportHashed
 importHashed_ = do
     importType <- importType_
-    hash       <- optional importHash_
+    hash       <- optional (try $ do nonemptyWhitespace; importHash_)
     return (ImportHashed {..})
 
 {-| Parse an `Import`
@@ -854,11 +918,13 @@ importHashed_ = do
 import_ :: Parser Import
 import_ = (do
     importHashed <- importHashed_
+    whitespace
     importMode   <- alternative <|> pure Code
     return (Import {..}) ) <?> "import"
   where
     alternative = do
       _as
+      nonemptyWhitespace
       (_Text >> pure RawText) <|> (_Location >> pure Location)
 
 -- | Same as @Data.Text.splitOn@, except always returning a `NonEmpty` result

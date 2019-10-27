@@ -152,40 +152,9 @@ shouldParse path = do
 shouldNotParse :: Text -> TestTree
 shouldNotParse path = do
     let expectedFailures =
-            [ -- These two unexpected successes are due to not correctly
-              -- requiring non-empty whitespace after the `:` in a type
-              -- annotation
-              parseDirectory </> "failure/unit/ImportEnvWrongEscape.dhall"
-
-              -- Other spacing related unexpected successes:
-            , parseDirectory </> "failure/spacing/AnnotationNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ApplicationNoSpace1.dhall"
-            , parseDirectory </> "failure/spacing/ApplicationNoSpace2.dhall"
-            , parseDirectory </> "failure/spacing/AssertNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ForallNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ImportAltNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ImportHashedNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/LambdaNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ListLitEmptyNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/MergeAnnotationNoSpace3.dhall"
-            , parseDirectory </> "failure/spacing/MergeNoSpace2.dhall"
-            , parseDirectory </> "failure/spacing/NaturalPlusNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/RecordTypeNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/ToMapAnnotNoSpace.dhall"
-            , parseDirectory </> "failure/spacing/UnionTypeNoSpace.dhall"
-
-            , parseDirectory </> "failure/ImportHeadersExteriorHash.dhall"
-
-              -- For parsing performance reasons the implementation
-              -- treats a missing type annotation on an empty list as
-              -- as a type-checking failure instead of a parse failure,
-              -- but this might be fixable.
-            , parseDirectory </> "failure/unit/ListLitEmptyMissingAnnotation.dhall"
-            , parseDirectory </> "failure/unit/ListLitEmptyAnnotation.dhall"
-
-              -- The same performance improvements also broke the
+            [ -- The same performance improvements also broke the
               -- precedence of parsing empty list literals
-            , parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
+              parseDirectory </> "failure/unit/ListLitEmptyPrecedence.dhall"
             ]
 
     let pathString = Text.unpack path

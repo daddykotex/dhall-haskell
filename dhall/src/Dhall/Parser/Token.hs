@@ -202,7 +202,7 @@ doubleInfinity :: Parser Double
 doubleInfinity = (do
     let negative = fmap (\_ -> negate) (char '-')
     sign <- negative <|> pure id
-    a <- text "Infinity" >> whitespace >> return (1.0/0.0)
+    a <- text "Infinity" >> return (1.0/0.0)
     return (sign a) ) <?> "literal"
 
 {-| Parse an `Integer` literal
@@ -213,7 +213,6 @@ integerLiteral :: Parser Integer
 integerLiteral = (do
     sign <- signPrefix
     a <- Text.Megaparsec.Char.Lexer.decimal
-    whitespace
     return (sign a) ) <?> "literal"
 
 {-| Parse a `Natural` literal 
@@ -223,7 +222,6 @@ integerLiteral = (do
 naturalLiteral :: Parser Natural
 naturalLiteral = (do
     a <- Text.Megaparsec.Char.Lexer.decimal
-    whitespace
     return a ) <?> "literal"
 
 {-| Parse an identifier (i.e. a variable or built-in)
@@ -236,10 +234,11 @@ identifier :: Parser Var
 identifier = do
     x <- label
 
-    let indexed = do
-            _ <- char '@' <?> "@"
-            n <- Text.Megaparsec.Char.Lexer.decimal
+    let indexed = try $ do
             whitespace
+            _ <- char '@' <?> "@"
+            whitespace
+            n <- Text.Megaparsec.Char.Lexer.decimal
             return n
 
     n <- indexed <|> pure 0
@@ -363,6 +362,7 @@ backtickLabel = do
 labels :: Parser (Set Text)
 labels = do
     _openBrace
+    whitespace
     xs <- nonEmptyLabels <|> emptyLabels
     _closeBrace
     return xs
@@ -371,7 +371,8 @@ labels = do
 
     nonEmptyLabels = do
         x  <- anyLabel
-        xs <- many (do _ <- _comma; anyLabel)
+        whitespace
+        xs <- many (do _comma; whitespace; l <- anyLabel; whitespace; return l)
         noDuplicates (x : xs)
 
 -- | Parse a label without parsing trailing whitespace
@@ -387,7 +388,6 @@ labelOnly = backtickLabel <|> simpleLabel False <?> "label"
 label :: Parser Text
 label = (do
     t <- backtickLabel <|> simpleLabel False
-    whitespace
     return t ) <?> "label"
 
 {-| Same as `label` except that built-in names are allowed
@@ -397,7 +397,6 @@ label = (do
 anyLabel :: Parser Text
 anyLabel = (do
     t <- backtickLabel <|> simpleLabel True
-    whitespace
     return t ) <?> "any label"
 
 {-| Parse a valid Bash environment variable name
@@ -668,13 +667,13 @@ char c = Text.Parser.Char.char c <?> [ c ]
 {-# INLINE char #-}
 
 reserved :: Data.Text.Text -> Parser ()
-reserved x = do _ <- text x; whitespace
+reserved x = do _ <- text x; return ()
 
 reservedCharOnly :: Char -> Parser ()
 reservedCharOnly c = do _ <- char c; return ()
 
 reservedChar :: Char -> Parser ()
-reservedChar c = do _ <- char c; whitespace
+reservedChar c = do _ <- char c; return ()
 
 builtin :: Data.Text.Text -> Parser ()
 builtin x = reserved x <?> "built-in"
@@ -692,7 +691,7 @@ keywordOnly :: Data.Text.Text -> Parser ()
 keywordOnly x = try (do _ <- text x; return ()) <?> "keyword"
 
 keyword :: Data.Text.Text -> Parser ()
-keyword x = try (do _ <- text x; nonemptyWhitespace) <?> "keyword"
+keyword x = try (do _ <- text x; return ()) <?> "keyword"
 
 {-| Parse the @if@ keyword
 
@@ -1127,7 +1126,7 @@ _at = reservedChar '@'
 _equivalent :: Parser ()
 _equivalent = (do
     void (char '≡' <?> "\"≡\"") <|> void (text "===")
-    whitespace ) <?> "operator"
+    ) <?> "operator"
 
 -- | Parse the @missing@ keyword
 _missing :: Parser ()
@@ -1141,25 +1140,25 @@ _importAlt = operatorChar '?'
 _combine :: Parser ()
 _combine = (do
     void (char '∧' <?> "\"∧\"") <|> void (text "/\\")
-    whitespace ) <?> "operator"
+    ) <?> "operator"
 
 -- | Parse the record type combine operator (@//\\\\@ or @⩓@)
 _combineTypes :: Parser ()
 _combineTypes = (do
     void (char '⩓' <?> "\"⩓\"") <|> void (text "//\\\\")
-    whitespace ) <?> "operator"
+    ) <?> "operator"
 
 -- | Parse the record \"prefer\" operator (@//@ or @⫽@)
 _prefer :: Parser ()
 _prefer = (do
     void (char '⫽' <?> "\"⫽\"") <|> void (text "//")
-    whitespace ) <?> "operator"
+    ) <?> "operator"
 
 -- | Parse a lambda (@\\@ or @λ@)
 _lambda :: Parser ()
 _lambda = (do
     _ <- Text.Parser.Char.satisfy predicate
-    whitespace ) <?> "\\"
+    return ()) <?> "\\"
   where
     predicate 'λ'  = True
     predicate '\\' = True
@@ -1169,13 +1168,13 @@ _lambda = (do
 _forall :: Parser ()
 _forall = (do
     void (char '∀' <?> "\"∀\"") <|> void (text "forall")
-    whitespace ) <?> "forall"
+    ) <?> "forall"
 
 -- | Parse a right arrow (@->@ or @→@)
 _arrow :: Parser ()
 _arrow = (do
     void (char '→' <?> "\"→\"") <|> void (text "->")
-    whitespace ) <?> "->"
+    ) <?> "->"
 
 -- | Parse a double colon (@::@)
 _doubleColon :: Parser ()
