@@ -264,17 +264,15 @@ parsers embedded = Parsers {..}
         alternative5 = do
             a <- operatorExpression
 
-            whitespace
-
             let alternative4A = do
-                    _arrow
+                    try (whitespace *> _arrow)
                     whitespace
                     b <- expression
                     whitespace
                     return (Pi "_" a b)
 
             let alternative4B = do
-                    _colon
+                    try (whitespace *> _colon)
 
                     nonemptyWhitespace
 
@@ -297,12 +295,10 @@ parsers embedded = Parsers {..}
     makeOperatorExpression operatorParser subExpression =
             noted (do
                 a <- subExpression
-                whitespace
                 b <- Text.Megaparsec.many $ do
-                    op <- operatorParser
+                    op <- try (whitespace *> operatorParser)
                     whitespace -- TODO: + and ? are followed by whsp1
                     r  <- subExpression
-                    whitespace
                     return (\l -> l `op` r)
                 return (foldl (\x f -> f x) a b) )
 
@@ -358,8 +354,6 @@ parsers embedded = Parsers {..}
     selectorExpression = noted (do
             a <- primitiveExpression
 
-            whitespace
-
             let recordType = _openParens *> expression <* _closeParens
 
             let field               x  e = Field   e  x
@@ -367,11 +361,11 @@ parsers embedded = Parsers {..}
             let projectByExpression xs e = Project e (Right xs)
 
             let alternatives =
-                        fmap field               anyLabel
-                    <|> fmap projectBySet        labels
-                    <|> fmap projectByExpression recordType
+                        fmap field               (try (whitespace *> anyLabel  ))
+                    <|> fmap projectBySet        (try (whitespace *> labels    ))
+                    <|> fmap projectByExpression (try (whitespace *> recordType))
 
-            b <- Text.Megaparsec.many ((do _dot; whitespace; alternatives <* whitespace))
+            b <- Text.Megaparsec.many ((do try (whitespace *> _dot); alternatives))
             return (foldl (\e k -> k e) a b) )
 
     primitiveExpression =
@@ -694,7 +688,6 @@ parsers embedded = Parsers {..}
 
     textLiteral = (do
             literal <- doubleQuotedLiteral <|> singleQuoteLiteral
-            whitespace
             return (TextLit literal) ) <?> "literal"
 
     recordTypeOrLiteral =
@@ -715,40 +708,34 @@ parsers embedded = Parsers {..}
     nonEmptyRecordTypeOrLiteral = do
             a <- anyLabel
 
-            whitespace
-
             let nonEmptyRecordType = do
-                    _colon
+                    try (whitespace *> _colon)
                     nonemptyWhitespace
                     b <- expression
-                    whitespace
                     e <- Text.Megaparsec.many (do
-                        _comma
+                        try (whitespace *> _comma)
                         whitespace
                         c <- anyLabel
                         whitespace
                         _colon
                         nonemptyWhitespace
                         d <- expression
-                        whitespace
                         return (c, d) )
                     m <- toMap ((a, b) : e)
                     return (Record m)
 
             let nonEmptyRecordLiteral = do
-                    _equal
+                    try (whitespace *> _equal)
                     whitespace
                     b <- expression
-                    whitespace
                     e <- Text.Megaparsec.many (do
-                        _comma
+                        try (whitespace *> _comma)
                         whitespace
                         c <- anyLabel
                         whitespace
                         _equal
                         whitespace
                         d <- expression
-                        whitespace
                         return (c, d) )
                     m <- toMap ((a, b) : e)
                     return (RecordLit m)
